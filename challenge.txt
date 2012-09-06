@@ -1,0 +1,11 @@
+Extra Credits
+---------------
+---------------------
+
+Modify the JOS kernel monitor so that you can 'continue' execution from the current location
+---------------------------------------------------------------------------------------------
+
+We have added two more commands to the monitor namely c and s. The 'c' command will continue the execution of user program from the point of breakpoint. The 's' command will single step the execution of the user program. These commands can be invoked from JOS prompt.
+
+We invoke the monitor on getting a breakpoint exception. This allows user to issue custom commands on JOS prompt. Both the 'c' and 's' commands will load the current user environment again after necessary checks. However, both will change EFLAGS differently. 'c' command would clean up the FL_TF bit in EFLAGS before loading the user environment. The 's' command will set the FL_TF bit in EFLAGS before loading user environment.
+Setting the FL_TF bit invokes Debug exception after executing a single instruction. We have handled debug exception to invoke the JOS prompt again to let user issue more commands.

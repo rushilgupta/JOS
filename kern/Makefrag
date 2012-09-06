@@ -34,7 +34,16 @@ KERN_SRCFILES :=	kern/entry.S \
 # Only build files if they exist.
 KERN_SRCFILES := $(wildcard $(KERN_SRCFILES))
 
-KERN_BINFILES := 
+# Binary program images to embed within the kernel.
+KERN_BINFILES :=	user/idle \
+			user/forktree \
+			user/pingpong \
+			user/primes \
+			user/testfile \
+			user/writemotd \
+			user/icode \
+			user/hello \
+			fs/fs
 
 KERN_OBJFILES := $(patsubst %.c, $(OBJDIR)/%.o, $(KERN_SRCFILES))
 KERN_OBJFILES := $(patsubst %.S, $(OBJDIR)/%.o, $(KERN_OBJFILES))

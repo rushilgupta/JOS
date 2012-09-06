@@ -118,10 +118,13 @@ USER_CFLAGS := $(CFLAGS) -DJOS_USER -gstabs
 # Include Makefrags for subdirectories
 include boot/Makefrag
 include kern/Makefrag
+include lib/Makefrag
+include user/Makefrag
+include fs/Makefrag
 
 
-IMAGES = $(OBJDIR)/kern/kernel.img
-QEMUOPTS = -no-kvm -hda $(OBJDIR)/kern/kernel.img -serial mon:stdio
+IMAGES = $(OBJDIR)/kern/kernel.img $(OBJDIR)/fs/fs.img
+QEMUOPTS = -no-kvm -hda $(OBJDIR)/kern/kernel.img -hdb $(OBJDIR)/fs/fs.img -serial mon:stdio
 
 .gdbinit: .gdbinit.tmpl
 	sed "s/localhost:1234/localhost:$(GDBPORT)/" < $^ > $@
@@ -173,13 +176,35 @@ grade: $(LABSETUP)grade-lab$(LAB).sh
 	$(MAKE) all
 	sh $(LABSETUP)grade-lab$(LAB).sh
 
-handin: tarball
-	@echo Please visit http://pdos.csail.mit.edu/cgi-bin/828handin
-	@echo and upload lab$(LAB)-handin.tar.gz.  Thanks!
+handin: realclean
+	if [ `git status --porcelain| wc -l` != 0 ] ; then echo "\n\n\n\n\t\tWARNING: YOU HAVE UNCOMMITTED CHANGES\n\n    Consider committing any pending changes and rerunning make handin.\n\n\n\n"; fi
+	git tag -f -a lab5-handin -m "Lab5 Handin"
+	git push --tags
 
 tarball: realclean
 	tar cf - `find . -type f | grep -v '^\.*$$' | grep -v '/CVS/' | grep -v '/\.svn/' | grep -v '/\.git/' | grep -v 'lab[0-9].*\.tar\.gz'` | gzip > lab$(LAB)-handin.tar.gz
 
+# For test runs
+prep-%:
+	$(V)rm -f $(OBJDIR)/kern/init.o $(IMAGES)
+	$(V)$(MAKE) "DEFS=-DTEST=_binary_obj_user_$*_start -DTESTSIZE=_binary_obj_user_$*_size" $(IMAGES)
+	$(V)rm -f $(OBJDIR)/kern/init.o
+
+run-%-nox-gdb: .gdbinit
+	$(V)$(MAKE) --no-print-directory prep-$*
+	$(QEMU) -nographic $(QEMUOPTS) -S $(QEMUGDB)
+
+run-%-gdb: .gdbinit
+	$(V)$(MAKE) --no-print-directory prep-$*
+	$(QEMU) $(QEMUOPTS) -S $(QEMUGDB)
+
+run-%-nox:
+	$(V)$(MAKE) --no-print-directory prep-$*
+	$(QEMU) -nographic $(QEMUOPTS)
+
+run-%:
+	$(V)$(MAKE) --no-print-directory prep-$*
+	$(QEMU) $(QEMUOPTS)
 
 # This magic automatically generates makefile dependencies
 # for header files included from C source files we compile,

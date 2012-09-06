@@ -282,8 +282,8 @@ struct Gatedesc {
 //	  the privilege level required for software to invoke
 //	  this interrupt/trap gate explicitly using an int instruction.
 #define SETGATE(gate, istrap, sel, off, dpl)			\
-{								\
-	(gate).gd_off_15_0 = (uint32_t) (off) & 0xffff;		\
+{	                        \
+    (gate).gd_off_15_0 = (uint32_t) (off) & 0xffff;		\
 	(gate).gd_ss = (sel);					\
 	(gate).gd_args = 0;					\
 	(gate).gd_rsv1 = 0;					\

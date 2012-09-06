@@ -4,20 +4,14 @@
 #include <inc/string.h>
 #include <inc/assert.h>
 
-#include <kern/monitor.h>
 #include <kern/console.h>
-
-// Test the stack backtrace function (lab 1 only)
-void
-test_backtrace(int x)
-{
-	cprintf("entering test_backtrace %d\n", x);
-	if (x > 0)
-		test_backtrace(x-1);
-	else
-		mon_backtrace(0, 0, 0);
-	cprintf("leaving test_backtrace %d\n", x);
-}
+#include <kern/pmap.h>
+#include <kern/kclock.h>
+#include <kern/env.h>
+#include <kern/trap.h>
+#include <kern/sched.h>
+#include <kern/picirq.h>
+#include <kern/monitor.h>
 
 void
 i386_init(void)
@@ -33,14 +27,34 @@ i386_init(void)
 	// Can't call cprintf until after we do this!
 	cons_init();
 
-	cprintf("6828 decimal is %o octal!\n", 6828);
+	// Lab 2 memory management initialization functions
+	i386_detect_memory();
+	i386_vm_init();
 
-	// Test the stack backtrace function (lab 1 only)
-	test_backtrace(5);
+	// Lab 3 user environment initialization functions
+	env_init();
+	idt_init();
 
-	// Drop into the kernel monitor.
-	while (1)
-		monitor(NULL);
+	// Lab 4 multitasking initialization functions
+	pic_init();
+	kclock_init();
+
+	// Should always have an idle process as first one.
+	ENV_CREATE(user_idle);
+
+	// Start fs.
+	ENV_CREATE(fs_fs);
+
+#if defined(TEST)
+	// Don't touch -- used by grading script!
+	ENV_CREATE2(TEST, TESTSIZE);
+#else
+	// Touch all you want.
+	ENV_CREATE(user_icode);
+#endif // TEST*
+
+	// Schedule and run the first user environment!
+	sched_yield();
 }
 
 

@@ -7,6 +7,7 @@
 #include <inc/assert.h>
 
 #include <kern/console.h>
+#include <kern/picirq.h>
 
 static void cons_intr(int (*proc)(void));
 static void cons_putc(int c);
@@ -99,7 +100,6 @@ serial_init(void)
 	serial_exists = (inb(COM1+COM_LSR) != 0xFF);
 	(void) inb(COM1+COM_IIR);
 	(void) inb(COM1+COM_RX);
-
 }
 
 
@@ -129,6 +129,39 @@ static unsigned addr_6845;
 static uint16_t *crt_buf;
 static uint16_t crt_pos;
 
+// Variables for colors.
+// '-' represents Numbers.
+char printBuffer [15];
+char colorFmt []    = "\e[--;--;--m";
+int fmtPtr          = 0;
+int bufferPtr       = 0;
+int skipIdx []      = {
+    -1 /*Doesn't match '\e'. Goto next match. -1 means error*/,
+    -1 /*Doesn't match '['. Goto next match. -1 means error*/,
+    -1 /*Doesn't match '-'. Goto next match. -1 means error*/,
+    4  /*Doesn't match '-'. Goto next match. -1 means error*/,
+    10 /*Doesn't match ';'. Goto next match. -1 means error*/,
+    10 /*Doesn't match '-'. Goto next match. -1 means error*/,
+    7 /*Doesn't match '-'. Goto next match. -1 means error*/,
+    10 /*Doesn't match ';'. Goto next match. -1 means error*/,
+    10 /*Doesn't match '-'. Goto next match. -1 means error*/,
+    10 /*Doesn't match '-'. Goto next match. -1 means error*/,
+    -1 /*Doesn't match 'm'. Goto next match. -1 means error*/,
+};
+
+char colorIndices [] = {
+    0x0,
+    0x4,
+    0x2,
+    0xE,
+    0x1,
+    0x5,
+    0x3,
+    0xF
+};
+
+int defColors   = 0x0700;
+
 static void
 cga_init(void)
 {
@@ -157,14 +190,65 @@ cga_init(void)
 	crt_pos = pos;
 }
 
-
-
 static void
 cga_putc(int c)
 {
+    if (fmtPtr > 0) {
+        if (c == '-') {
+            // Validate template character.
+            goto failCase;
+        }
+        while (skipIdx [fmtPtr] != -1 || (colorFmt [fmtPtr] == c || (colorFmt [fmtPtr] == '-' && c >= '0' && c <= '9'))) {
+            if (colorFmt [fmtPtr] == c || (colorFmt [fmtPtr] == '-' && c >= '0' && c <= '9')) {
+                printBuffer [bufferPtr++]   = c;
+                fmtPtr++;
+                if (c == 'm') {
+                    int i   = 0;
+                    int attributes [4];
+                    int curAttrib   = 0;
+                    for (i = 1; i < bufferPtr; i++) {
+                        if (printBuffer [i] >= '0' && printBuffer [i] <= '9') {
+                            attributes [curAttrib]  = attributes [curAttrib]*10 + printBuffer [i] - '0';
+                        } else {
+                            attributes [++curAttrib]    = 0;
+                        }
+                    }
+                    //Assign Colors
+                    for (i = 0; i <= curAttrib; i++) {
+                        if (attributes [i] >= 30 && attributes [i] <= 37) {
+                            defColors   &= 0xF0FF;
+                            defColors   |= (colorIndices [attributes [i] - 30] << 8);
+                        } else if (attributes [i] >= 40 && attributes [i] <= 47) {
+                            defColors   &= 0x0FFF;
+                            defColors   |= (colorIndices [attributes [i] - 40] << 12);
+                        }
+                    }
+
+                    fmtPtr      = 0;
+                    bufferPtr   = 0;
+                }
+                return;
+            } else {
+                fmtPtr  = skipIdx [fmtPtr];
+            }
+        }
+
+        if (fmtPtr != 0 && skipIdx [fmtPtr] == -1) {
+            // Error case.
+            //Flush to output.
+failCase:
+            printBuffer [bufferPtr++]   = c;
+            fmtPtr                  = 0;
+            crt_buf[crt_pos++]      = '\e';		/* write the character */
+            goto printEscape;
+        } else {
+            return;
+        }
+    }
+
 	// if no attribute given, then use black on white
 	if (!(c & ~0xFF))
-		c |= 0x0700;
+		c |= defColors;
 
 	switch (c & 0xff) {
 	case '\b':
@@ -186,18 +270,26 @@ cga_putc(int c)
 		cons_putc(' ');
 		cons_putc(' ');
 		break;
+    case '\e':
+        bufferPtr       = 0;
+        fmtPtr          = 1;
+        printBuffer [bufferPtr++]   = c;
+        return;
 	default:
 		crt_buf[crt_pos++] = c;		/* write the character */
 		break;
 	}
 
-	// What is the purpose of this?
+printEscape:
+	// If the screen is full, it scrolls up by a row.
+	// This erases the top row and give a new row at the bottom.
+
 	if (crt_pos >= CRT_SIZE) {
 		int i;
 
 		memmove(crt_buf, crt_buf + CRT_COLS, (CRT_SIZE - CRT_COLS) * sizeof(uint16_t));
 		for (i = CRT_SIZE - CRT_COLS; i < CRT_SIZE; i++)
-			crt_buf[i] = 0x0700 | ' ';
+			crt_buf[i] = defColors | ' ';
 		crt_pos -= CRT_COLS;
 	}
 
@@ -206,8 +298,16 @@ cga_putc(int c)
 	outb(addr_6845 + 1, crt_pos >> 8);
 	outb(addr_6845, 15);
 	outb(addr_6845 + 1, crt_pos);
-}
 
+    if (bufferPtr > 0) {
+        int count   = bufferPtr;
+        int i;
+        bufferPtr   = 0;
+        for(i = 1; i < count ; i++) {
+            cga_putc(printBuffer [i]);
+        }
+    }
+}
 
 /***** Keyboard input code *****/
 
@@ -369,6 +469,9 @@ kbd_intr(void)
 static void
 kbd_init(void)
 {
+	// Drain the kbd buffer so that Bochs generates interrupts.
+	kbd_intr();
+	irq_setmask_8259A(irq_mask_8259A & ~(1<<1));
 }
 
 

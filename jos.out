@@ -1,0 +1,57 @@
+Physical memory: 66556K available, base = 640K, extended = 65532K
+Free Mem=f01f9000
+Base Pages: f01a9000
+check_page_alloc() succeeded!
+page_check() succeeded!
+check_boot_pgdir() succeeded!
+enabled interrupts: 1 2
+	     Setup timer interrupts via 8259A
+enabled interrupts: 0 1 2
+	     unmasked timer interrupt
+FS is running
+FS can do I/O
+Device 1 presence: 1
+icode startup
+icode: open /motd
+block cache is good
+superblock is good
+bitmap is good
+alloc_block is good
+file_open is good
+file_get_block is good
+file_flush is good
+file_truncate is good
+file rewrite is good
+icode: read /motd
+This is /motd, the message of the day.
+
+Welcome to the JOS kernel, now with a file system!
+
+icode: close /motd
+icode: spawn /init
+icode: exiting
+init: running
+init: data seems okay
+init: bss seems okay
+init: args: 'init' 'initarg1' 'initarg2'
+init: exiting
+Welcome to the JOS kernel monitor!
+Type 'help' for a list of commands.
+TRAP frame at 0xf01da000
+  edi  0x00000000
+  esi  0x00000000
+  ebp  0xeebfdfd0
+  oesp 0xefbfffdc
+  ebx  0x00000000
+  edx  0x00000000
+  ecx  0x00000000
+  eax  0x0000000b
+  es   0x----0023
+  ds   0x----0023
+  trap 0x00000003 Breakpoint
+  err  0x00000000
+  eip  0x0080004a
+  cs   0x----001b
+  flag 0x00000296
+  esp  0xeebfdfc8
+  ss   0x----0023
